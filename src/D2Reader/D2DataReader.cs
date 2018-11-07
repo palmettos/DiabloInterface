@@ -118,6 +118,7 @@ namespace Zutatensuppe.D2Reader
 
         public DataReaderEnableFlags ReadFlags { get; set; } =
             DataReaderEnableFlags.CurrentArea
+            | DataReaderEnableFlags.EquippedItemStrings
             | DataReaderEnableFlags.CurrentDifficulty
             | DataReaderEnableFlags.CurrentPlayersX
             | DataReaderEnableFlags.QuestBuffers
@@ -478,22 +479,10 @@ namespace Zutatensuppe.D2Reader
                 List<D2Stat> itemStats = unitReader.GetStats(item);
                 if (itemStats == null) continue;
 
-                StringBuilder statBuilder = new StringBuilder();
-                statBuilder.Append(unitReader.inventoryReader.ItemReader.GetFullItemName(item));
-
-                statBuilder.Append(Environment.NewLine);
-                List<string> magicalStrings = unitReader.inventoryReader.ItemReader.GetMagicalStrings(item);
-                foreach (string str in magicalStrings)
-                {
-                    statBuilder.Append("    ");
-                    statBuilder.Append(str);
-                    statBuilder.Append(Environment.NewLine);
-                }
-
                 D2ItemData itemData = reader.Read<D2ItemData>(item.UnitData);
                 if (!itemStrings.ContainsKey(itemData.BodyLoc))
                 {
-                    itemStrings.Add(itemData.BodyLoc, statBuilder.ToString());
+                    itemStrings.Add(itemData.BodyLoc, item.GUID.ToString());
                 }
             }
             return itemStrings;
