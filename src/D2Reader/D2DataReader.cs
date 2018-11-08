@@ -39,11 +39,34 @@ namespace Zutatensuppe.D2Reader
         public Character Character { get; }
     }
 
+    public struct StructuredItemData
+    {
+        public int guid;
+        public string uniqueName;
+        public string baseName;
+        public string quality;
+        public string location;
+        public List<string> properties;
+
+        public string asString()
+        {
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.Append(uniqueName + Environment.NewLine);
+
+            foreach (string str in properties)
+            {
+                stringBuilder.Append("    " + str + Environment.NewLine);
+            }
+
+            return stringBuilder.ToString();
+        }
+    }
+
     public class DataReadEventArgs : EventArgs
     {
         public DataReadEventArgs(
             Character character,
-            Dictionary<BodyLocation, string> itemStrings,
+            Dictionary<BodyLocation, StructuredItemData> items,
             int currentArea,
             GameDifficulty currentDifficulty,
             int currentPlayersX,
@@ -52,7 +75,7 @@ namespace Zutatensuppe.D2Reader
             IList<QuestCollection> quests)
         {
             Character = character;
-            ItemStrings = itemStrings;
+            structuredItems = items;
             CurrentArea = currentArea;
             CurrentDifficulty = currentDifficulty;
             CurrentPlayersX = currentPlayersX;
@@ -62,7 +85,7 @@ namespace Zutatensuppe.D2Reader
         }
 
         public Character Character { get; }
-        public Dictionary<BodyLocation, string> ItemStrings { get; }
+        public Dictionary<BodyLocation, StructuredItemData> structuredItems { get; }
         public int CurrentArea { get; }
         public int CurrentPlayersX { get; }
         public GameDifficulty CurrentDifficulty { get; }
@@ -392,7 +415,7 @@ namespace Zutatensuppe.D2Reader
 
             OnDataRead(new DataReadEventArgs(
                 CurrentCharacter,
-                ProcessEquippedItemStrings(),
+                ProcessEquippedItems(),
                 ProcessCurrentArea(),
                 currentDifficulty,
                 ProcessCurrentPlayersX(),
@@ -457,35 +480,43 @@ namespace Zutatensuppe.D2Reader
                 : GameDifficulty.Normal;
         }
 
-        Dictionary<BodyLocation, string> ProcessEquippedItemStrings()
+        Dictionary<BodyLocation, StructuredItemData> ProcessEquippedItems()
         {
             return ReadFlags.HasFlag(DataReaderEnableFlags.EquippedItemStrings)
-                ? ReadEquippedItemStrings()
-                : new Dictionary<BodyLocation, string>();
+                ? GatherEquippedItems()
+                : new Dictionary<BodyLocation, StructuredItemData>();
         }
 
-        Dictionary<BodyLocation, string> ReadEquippedItemStrings()
+        // This function wasn't being used, so I repurposed it for the D2ID service.
+        Dictionary<BodyLocation, StructuredItemData> GatherEquippedItems()
         {
             var player = unitReader.GetPlayer();
+            Dictionary<BodyLocation, StructuredItemData> items = new Dictionary<BodyLocation, StructuredItemData>();
             if (player == null)
-                return new Dictionary<BodyLocation, string>();
+                return items;
 
             // Build filter to get only equipped items.
             bool Filter(D2ItemData data) => data.BodyLoc != BodyLocation.None;
 
-            var itemStrings = new Dictionary<BodyLocation, string>();
-            foreach (D2Unit item in unitReader.inventoryReader.EnumerateInventoryBackward(player, Filter))
+            InventoryReader inventoryReader = unitReader.inventoryReader;
+            ItemReader itemReader = inventoryReader.ItemReader;
+            foreach (D2Unit item in inventoryReader.EnumerateInventoryBackward(player, Filter))
             {
-                List<D2Stat> itemStats = unitReader.GetStats(item);
-                if (itemStats == null) continue;
+                BodyLocation loc = itemReader.GetItemData(item).BodyLoc;
 
-                D2ItemData itemData = reader.Read<D2ItemData>(item.UnitData);
-                if (!itemStrings.ContainsKey(itemData.BodyLoc))
+                StructuredItemData data = new StructuredItemData
                 {
-                    itemStrings.Add(itemData.BodyLoc, item.GUID.ToString());
-                }
+                    guid = item.GUID,
+                    uniqueName = itemReader.GetFullItemName(item),
+                    baseName = itemReader.GetGrammaticalName(itemReader.GetItemName(item), out string grammarCase),
+                    quality = itemReader.GetItemQuality(item).ToString(),
+                    location = loc.ToString(),
+                    properties = itemReader.GetMagicalStrings(item)
+                };
+
+                items[loc] = data;
             }
-            return itemStrings;
+            return items;
         }
 
         List<int> ProcessInventoryItemIds()

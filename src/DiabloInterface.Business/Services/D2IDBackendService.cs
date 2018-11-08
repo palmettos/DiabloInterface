@@ -3,22 +3,42 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
+using Zutatensuppe.D2Reader;
+using Zutatensuppe.D2Reader.Models;
+using Zutatensuppe.D2Reader.Struct.Item;
+using Zutatensuppe.DiabloInterface.Business.Data;
+using Zutatensuppe.DiabloInterface.Business.IO;
+using Zutatensuppe.DiabloInterface.Core.Logging;
+using Newtonsoft.Json;
+
 namespace Zutatensuppe.DiabloInterface.Business.Services
 {
-    using System;
-    using System.Reflection;
-    using Zutatensuppe.D2Reader;
-    using Zutatensuppe.D2Reader.Models;
-    using Zutatensuppe.D2Reader.Struct.Item;
-    using Zutatensuppe.DiabloInterface.Business.Data;
-    using Zutatensuppe.DiabloInterface.Business.IO;
-    using Zutatensuppe.DiabloInterface.Core.Logging;
+
+    public class InventoryState
+    {
+        public Dictionary<BodyLocation, StructuredItemData> state;
+
+        public InventoryState()
+        {
+            state = new Dictionary<BodyLocation, StructuredItemData>();
+
+            foreach (BodyLocation location in Enum.GetValues(typeof(BodyLocation)))
+            {
+                if (location != BodyLocation.None)
+                {
+                    state.Add(location, new StructuredItemData());
+                }
+            }
+        }
+    }
+
     public class D2IDBackendService
     {
         static readonly ILogger Logger = LogServiceLocator.Get(MethodBase.GetCurrentMethod().DeclaringType);
         readonly ISettingsService settingsService;
         readonly IGameService gameService;
-        Dictionary<BodyLocation, string> inventoryState;
+        InventoryState inventoryState;
         public D2IDBackendService(ISettingsService settingsService, IGameService gameService)
         {
             Logger.Info("Creating D2ID backend service.");
@@ -27,7 +47,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             this.settingsService = settingsService;
             this.gameService = gameService;
             RegisterServiceEventHandlers();
-            inventoryState = new Dictionary<BodyLocation, string>();
+            inventoryState = new InventoryState();
+            string invJson = JsonConvert.SerializeObject(inventoryState.state);
+            Logger.Info(invJson);
         }
         void RegisterServiceEventHandlers()
         {
@@ -38,52 +60,32 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         {
             Logger.Info("New character created.");
         }
+
         void D2IDOnDataRead(object sender, DataReadEventArgs e)
         {
-            Dictionary<string, List<BodyLocation>> locsToChange = new Dictionary<string, List<BodyLocation>>()
+            bool stateDidChange = false;
+
+            foreach (BodyLocation location in Enum.GetValues(typeof(BodyLocation)))
             {
-                {"add", new List<BodyLocation>()},
-                {"remove", new List<BodyLocation>()}
-            };
-            bool didItemStateChange = false;
-            Logger.Info("New iteration");
-            foreach (BodyLocation loc in Enum.GetValues(typeof(BodyLocation)))
-            {
-                if (inventoryState.ContainsKey(loc) && !e.ItemStrings.ContainsKey(loc))
+                if (location != BodyLocation.None)
                 {
-                    locsToChange["remove"].Add(loc);
-                    didItemStateChange = true;
-                }
-                else if (!inventoryState.ContainsKey(loc) && e.ItemStrings.ContainsKey(loc))
-                {
-                    locsToChange["add"].Add(loc);
-                    didItemStateChange = true;
-                }
-                else if (inventoryState.ContainsKey(loc) && e.ItemStrings.ContainsKey(loc))
-                {
-                    if (inventoryState[loc] != e.ItemStrings[loc])
+                    if (e.structuredItems.ContainsKey(location))
                     {
-                        locsToChange["add"].Add(loc);
-                        didItemStateChange = true;
+                        if (inventoryState.state[location].guid != e.structuredItems[location].guid)
+                        {
+                            inventoryState.state[location] = e.structuredItems[location];
+                            Logger.Info("Overwrote " + location.ToString());
+                            stateDidChange = true;
+                        }
                     }
-                }
-            }
-            foreach (var key in locsToChange.Keys)
-            {
-                foreach (var loc in locsToChange[key])
-                {
-                    switch (key)
+                    else
                     {
-                        case "add":
-                            Logger.Info(loc.ToString());
-                            Logger.Info("Added to equipped items");
-                            inventoryState[loc] = e.ItemStrings[loc];
-                            break;
-                        case "remove":
-                            Logger.Info(loc.ToString());
-                            Logger.Info("Removed from equipped items");
-                            inventoryState.Remove(loc);
-                            break;
+                        if (inventoryState.state[location].guid != 0)
+                        {
+                            inventoryState.state[location] = new StructuredItemData();
+                            Logger.Info("Removed " + location.ToString());
+                            stateDidChange = true;
+                        }
                     }
                 }
             }

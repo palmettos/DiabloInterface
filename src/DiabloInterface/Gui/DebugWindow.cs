@@ -1,4 +1,4 @@
-﻿namespace Zutatensuppe.DiabloInterface.Gui
+namespace Zutatensuppe.DiabloInterface.Gui
 {
     using System;
     using System.Collections.Generic;
@@ -109,7 +109,7 @@
                 UpdateQuestData(quests, difficulty);
             }
 
-            UpdateItemStats(e.ItemStrings);
+            UpdateItemStats(e.structuredItems);
         }
 
         void UpdateQuestData(QuestCollection quests, GameDifficulty difficulty)
@@ -223,9 +223,16 @@
             return questRows;
         }
 
-        void UpdateItemStats(IReadOnlyDictionary<BodyLocation, string> itemStrings)
+        void UpdateItemStats(IReadOnlyDictionary<BodyLocation, StructuredItemData> items)
         {
             if (DesignMode) return;
+
+            Dictionary<BodyLocation, string> itemStrings = new Dictionary<BodyLocation, string>();
+
+            foreach (var location in items.Keys)
+            {
+                itemStrings[location] = items[location].asString();
+            }
             this.itemStrings = itemStrings;
             UpdateItemDebugInformation();
         }
