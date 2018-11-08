@@ -63,6 +63,8 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         void D2IDOnDataRead(object sender, DataReadEventArgs e)
         {
+            List<StructuredItemData> charms = e.structuredCharms;
+
             bool stateDidChange = false;
 
             foreach (BodyLocation location in Enum.GetValues(typeof(BodyLocation)))

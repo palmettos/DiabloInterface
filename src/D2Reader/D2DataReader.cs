@@ -67,6 +67,7 @@ namespace Zutatensuppe.D2Reader
         public DataReadEventArgs(
             Character character,
             Dictionary<BodyLocation, StructuredItemData> items,
+            List<StructuredItemData> charms,
             int currentArea,
             GameDifficulty currentDifficulty,
             int currentPlayersX,
@@ -76,6 +77,7 @@ namespace Zutatensuppe.D2Reader
         {
             Character = character;
             structuredItems = items;
+            structuredCharms = charms;
             CurrentArea = currentArea;
             CurrentDifficulty = currentDifficulty;
             CurrentPlayersX = currentPlayersX;
@@ -86,6 +88,7 @@ namespace Zutatensuppe.D2Reader
 
         public Character Character { get; }
         public Dictionary<BodyLocation, StructuredItemData> structuredItems { get; }
+        public List<StructuredItemData> structuredCharms { get; }
         public int CurrentArea { get; }
         public int CurrentPlayersX { get; }
         public GameDifficulty CurrentDifficulty { get; }
@@ -416,6 +419,7 @@ namespace Zutatensuppe.D2Reader
             OnDataRead(new DataReadEventArgs(
                 CurrentCharacter,
                 ProcessEquippedItems(),
+                ProcessInventoryCharms(),
                 ProcessCurrentArea(),
                 currentDifficulty,
                 ProcessCurrentPlayersX(),
@@ -487,6 +491,13 @@ namespace Zutatensuppe.D2Reader
                 : new Dictionary<BodyLocation, StructuredItemData>();
         }
 
+        List<StructuredItemData> ProcessInventoryCharms()
+        {
+            return ReadFlags.HasFlag(DataReaderEnableFlags.EquippedItemStrings)
+                ? GatherInventoryCharms()
+                : new List<StructuredItemData>();
+        }
+
         // This function wasn't being used, so I repurposed it for the D2ID service.
         Dictionary<BodyLocation, StructuredItemData> GatherEquippedItems()
         {
@@ -515,6 +526,39 @@ namespace Zutatensuppe.D2Reader
                 };
 
                 items[loc] = data;
+            }
+            return items;
+        }
+
+        List<StructuredItemData> GatherInventoryCharms()
+        {
+            var player = unitReader.GetPlayer();
+            List<StructuredItemData> items = new List<StructuredItemData>();
+            if (player == null)
+                return items;
+
+            // Build filter to get only stashed items.
+            bool Filter(D2ItemData data) => data.BodyLoc == BodyLocation.None && data.InvPage == InventoryPage.Inventory;
+
+            InventoryReader inventoryReader = unitReader.inventoryReader;
+            ItemReader itemReader = inventoryReader.ItemReader;
+            List<string> charmNames = new List<string> {"Small Charm", "Large Charm", "Grand Charm"};
+            foreach (D2Unit item in inventoryReader.EnumerateInventoryBackward(player, Filter))
+            {
+                string baseName = itemReader.GetGrammaticalName(itemReader.GetItemName(item), out string grammarCase);
+                if (charmNames.Contains(baseName))
+                {
+                    StructuredItemData data = new StructuredItemData
+                    {
+                        guid = item.GUID,
+                        uniqueName = itemReader.GetFullItemName(item),
+                        baseName = baseName,
+                        quality = itemReader.GetItemQuality(item).ToString(),
+                        location = "Inventory",
+                        properties = itemReader.GetMagicalStrings(item)
+                    };
+                    items.Add(data);
+                }
             }
             return items;
         }
