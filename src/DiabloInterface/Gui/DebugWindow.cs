@@ -28,7 +28,7 @@ namespace Zutatensuppe.DiabloInterface.Gui
             new Dictionary<GameDifficulty, QuestDebugRow[,]>();
 
         List<AutosplitBinding> autoSplitBindings;
-        IReadOnlyDictionary<BodyLocation, string> itemStrings;
+        IReadOnlyDictionary<string, string> itemStrings;
 
         Dictionary<Label, BodyLocation> locs;
         Label clickedLabel;
@@ -109,7 +109,7 @@ namespace Zutatensuppe.DiabloInterface.Gui
                 UpdateQuestData(quests, difficulty);
             }
 
-            UpdateItemStats(e.structuredItems);
+            UpdateItemStats(e.structuredInventory);
         }
 
         void UpdateQuestData(QuestCollection quests, GameDifficulty difficulty)
@@ -223,15 +223,18 @@ namespace Zutatensuppe.DiabloInterface.Gui
             return questRows;
         }
 
-        void UpdateItemStats(IReadOnlyDictionary<BodyLocation, StructuredItemData> items)
+        void UpdateItemStats(StructuredInventory inventory)
         {
             if (DesignMode) return;
 
-            Dictionary<BodyLocation, string> itemStrings = new Dictionary<BodyLocation, string>();
+            Dictionary<string, string> itemStrings = new Dictionary<string, string>();
 
-            foreach (var location in items.Keys)
+            bool filter(StructuredItemData item) => item.location != "None";
+            Dictionary<int, StructuredItemData> equipped = inventory.filter(filter);
+
+            foreach (var item in equipped.Values)
             {
-                itemStrings[location] = items[location].asString();
+                itemStrings[item.location] = item.asString();
             }
             this.itemStrings = itemStrings;
             UpdateItemDebugInformation();
@@ -241,13 +244,13 @@ namespace Zutatensuppe.DiabloInterface.Gui
         {
             // hover has precedence vs clicked labels
             Label l = hoveredLabel != null ? hoveredLabel : (clickedLabel != null ? clickedLabel : null);
-            if (l == null || itemStrings == null || !locs.ContainsKey(l) || !itemStrings.ContainsKey(locs[l]))
+            if (l == null || itemStrings == null || !locs.ContainsKey(l) || !itemStrings.ContainsKey(locs[l].ToString()))
             {
                 textItemDesc.Text = "";
                 return;
             }
             
-            textItemDesc.Text = itemStrings[locs[l]];
+            textItemDesc.Text = itemStrings[locs[l].ToString()];
         }
 
         private void LabelClick(object sender, EventArgs e)

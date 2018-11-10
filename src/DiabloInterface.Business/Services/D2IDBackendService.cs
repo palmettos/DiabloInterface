@@ -14,83 +14,101 @@ using Newtonsoft.Json;
 
 namespace Zutatensuppe.DiabloInterface.Business.Services
 {
-
-    public class InventoryState
-    {
-        public Dictionary<BodyLocation, StructuredItemData> state;
-
-        public InventoryState()
-        {
-            state = new Dictionary<BodyLocation, StructuredItemData>();
-
-            foreach (BodyLocation location in Enum.GetValues(typeof(BodyLocation)))
-            {
-                if (location != BodyLocation.None)
-                {
-                    state.Add(location, new StructuredItemData());
-                }
-            }
-        }
-    }
-
     public class D2IDBackendService
     {
         static readonly ILogger Logger = LogServiceLocator.Get(MethodBase.GetCurrentMethod().DeclaringType);
         readonly ISettingsService settingsService;
         readonly IGameService gameService;
-        InventoryState inventoryState;
+        Dictionary<string, StructuredItemData> lastEquippedItemState;
+        Dictionary<int, StructuredItemData> lastEquippedCharmState;
+
         public D2IDBackendService(ISettingsService settingsService, IGameService gameService)
         {
             Logger.Info("Creating D2ID backend service.");
-            if (settingsService == null) throw new ArgumentNullException(nameof(settingsService));
-            if (gameService == null) throw new ArgumentNullException(nameof(gameService));
-            this.settingsService = settingsService;
-            this.gameService = gameService;
+            this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            this.gameService = gameService ?? throw new ArgumentNullException(nameof(gameService));
             RegisterServiceEventHandlers();
-            inventoryState = new InventoryState();
-            string invJson = JsonConvert.SerializeObject(inventoryState.state);
-            Logger.Info(invJson);
-        }
-        void RegisterServiceEventHandlers()
-        {
-            gameService.DataRead += D2IDOnDataRead;
-            gameService.CharacterCreated += D2IDOnCharacterCreated;
-        }
-        void D2IDOnCharacterCreated(object sender, CharacterCreatedEventArgs e)
-        {
-            Logger.Info("New character created.");
-        }
 
-        void D2IDOnDataRead(object sender, DataReadEventArgs e)
-        {
-            List<StructuredItemData> charms = e.structuredCharms;
-
-            bool stateDidChange = false;
-
+            lastEquippedItemState = new Dictionary<string, StructuredItemData>();
             foreach (BodyLocation location in Enum.GetValues(typeof(BodyLocation)))
             {
                 if (location != BodyLocation.None)
                 {
-                    if (e.structuredItems.ContainsKey(location))
+                    lastEquippedItemState[location.ToString()] = null;
+                }
+            }
+
+            lastEquippedCharmState = new Dictionary<int, StructuredItemData>();
+        }
+
+        void RegisterServiceEventHandlers()
+        {
+            gameService.DataRead += D2IDOnDataRead;
+        }
+
+        void D2IDOnDataRead(object sender, DataReadEventArgs e)
+        {
+            Dictionary<int, StructuredItemData> equippedItemsTemp = e.structuredInventory.filter((StructuredItemData item) =>
+            {
+                return item.location != "None" && item.page == "Equipped";
+            });
+
+            // Invert the item state into BodyLoc -> StructuredItemData pairs
+            Dictionary<string, StructuredItemData> equippedItems = new Dictionary<string, StructuredItemData>();
+            foreach (StructuredItemData item in equippedItemsTemp.Values)
+            {
+                equippedItems[item.location] = item;
+            }
+
+            // Update the equipped item state
+            bool stateDidChange = false;
+            foreach (string location in lastEquippedItemState.Keys.ToArray())
+            {
+                if (equippedItems.ContainsKey(location))
+                {
+                    if (lastEquippedItemState[location] == null || lastEquippedItemState[location].guid != equippedItems[location].guid)
                     {
-                        if (inventoryState.state[location].guid != e.structuredItems[location].guid)
-                        {
-                            inventoryState.state[location] = e.structuredItems[location];
-                            Logger.Info("Overwrote " + location.ToString());
-                            stateDidChange = true;
-                        }
+                        lastEquippedItemState[location] = equippedItems[location];
+                        Logger.Info("Overwrote " + location);
+                        stateDidChange = true;
                     }
-                    else
+                }
+                else
+                {
+                    if (lastEquippedItemState[location] != null)
                     {
-                        if (inventoryState.state[location].guid != 0)
-                        {
-                            inventoryState.state[location] = new StructuredItemData();
-                            Logger.Info("Removed " + location.ToString());
-                            stateDidChange = true;
-                        }
+                        lastEquippedItemState[location] = null;
+                        Logger.Info("Removed " + location);
+                        stateDidChange = true;
                     }
                 }
             }
+
+            HashSet<string> charmBaseNames = new HashSet<string> { "Small Charm", "Large Charm", "Grand Charm" };
+            Dictionary<int, StructuredItemData> charms = e.structuredInventory.filter((StructuredItemData item) =>
+            {
+                return charmBaseNames.Contains(item.baseName) && item.page != "Stash";
+            });
+
+
+        }
+
+        // Data that should be sent when the inventory state changes
+        void ProcessInventoryChange()
+        {
+
+        }
+
+        // Data that should be sent when the character's stats change
+        void ProcessCharacterStatChange()
+        {
+
+        }
+
+        // Data that should be sent when the character levels up
+        void ProcessCharacterLevelUp()
+        {
+
         }
     }
 }
