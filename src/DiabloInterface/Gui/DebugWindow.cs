@@ -49,7 +49,9 @@ namespace Zutatensuppe.DiabloInterface.Gui
             {
                 Logger.Info("Disposing debug window.");
                 UnregisterServiceEventHandlers();
-                DisableReaderDebugData();
+
+                // D2IDBackendService needs to keep this flag enabled
+                //DisableReaderDebugData();
             };
 
             InitializeComponent();
