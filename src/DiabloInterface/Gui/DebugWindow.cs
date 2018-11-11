@@ -61,14 +61,14 @@ namespace Zutatensuppe.DiabloInterface.Gui
         void EnableReaderDebugData()
         {
             var dataReader = gameService.DataReader;
-            var flags = dataReader.ReadFlags.SetFlag(DataReaderEnableFlags.EquippedItemStrings);
+            var flags = dataReader.ReadFlags.SetFlag(DataReaderEnableFlags.InventoryItemData);
             dataReader.ReadFlags = flags;
         }
 
         void DisableReaderDebugData()
         {
             var dataReader = gameService.DataReader;
-            var flags = dataReader.ReadFlags.ClearFlag(DataReaderEnableFlags.EquippedItemStrings);
+            var flags = dataReader.ReadFlags.ClearFlag(DataReaderEnableFlags.InventoryItemData);
             dataReader.ReadFlags = flags;
         }
 

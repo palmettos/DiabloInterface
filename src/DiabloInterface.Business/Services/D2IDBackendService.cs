@@ -21,6 +21,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         readonly IGameService gameService;
         Dictionary<string, StructuredItemData> lastEquippedItemState;
         Dictionary<int, StructuredItemData> lastEquippedCharmState;
+        string baseURI;
 
         public D2IDBackendService(ISettingsService settingsService, IGameService gameService)
         {
@@ -39,6 +40,12 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             }
 
             lastEquippedCharmState = new Dictionary<int, StructuredItemData>();
+
+#if DEBUG
+            baseURI = "localhost";
+#else
+            baseURI = "d2id.multilurk.tv";
+#endif
         }
 
         void RegisterServiceEventHandlers()
@@ -61,7 +68,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             }
 
             // Update the equipped item state
-            bool stateDidChange = false;
+            bool inventoryStateDidChange = false;
             foreach (string location in lastEquippedItemState.Keys.ToArray())
             {
                 if (equippedItems.ContainsKey(location))
@@ -70,7 +77,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                     {
                         lastEquippedItemState[location] = equippedItems[location];
                         Logger.Info("Overwrote " + location);
-                        stateDidChange = true;
+                        inventoryStateDidChange = true;
                     }
                 }
                 else
@@ -79,24 +86,46 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                     {
                         lastEquippedItemState[location] = null;
                         Logger.Info("Removed " + location);
-                        stateDidChange = true;
+                        inventoryStateDidChange = true;
                     }
                 }
             }
 
+            // Get the inventory charm state
             HashSet<string> charmBaseNames = new HashSet<string> { "Small Charm", "Large Charm", "Grand Charm" };
-            Dictionary<int, StructuredItemData> charms = e.structuredInventory.filter((StructuredItemData item) =>
+            Dictionary<int, StructuredItemData> equippedCharms = e.structuredInventory.filter((StructuredItemData item) =>
             {
                 return charmBaseNames.Contains(item.baseName) && item.page != "Stash";
             });
 
+            // Update the inventory charm state
+            HashSet<int> updateGuids = new HashSet<int>(lastEquippedCharmState.Keys);
+            HashSet<int> currGuids = new HashSet<int>(equippedCharms.Keys);
+            updateGuids.SymmetricExceptWith(currGuids);
+            foreach (int guid in updateGuids)
+            {
+                if (lastEquippedCharmState.Keys.Contains(guid))
+                {
+                    lastEquippedCharmState.Remove(guid);
+                    Logger.Info("Removed charm: " + guid.ToString());
+                    inventoryStateDidChange = true;
+                }
+                if (equippedCharms.Keys.Contains(guid))
+                {
+                    lastEquippedCharmState[guid] = equippedCharms[guid];
+                    Logger.Info("Added charm: " + guid.ToString());
+                    inventoryStateDidChange = true;
+                }
+            }
 
+            // Process inventory state change event
+            if (inventoryStateDidChange) ProcessInventoryChange();
         }
 
         // Data that should be sent when the inventory state changes
         void ProcessInventoryChange()
         {
-
+            // Construct inventory JSON object and send to backend asynchronously
         }
 
         // Data that should be sent when the character's stats change

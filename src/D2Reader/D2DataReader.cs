@@ -25,7 +25,7 @@ namespace Zutatensuppe.D2Reader
         CurrentDifficulty = 1 << 1,
         QuestBuffers = 1 << 2,
         InventoryItemIds = 1 << 3,
-        EquippedItemStrings = 1 << 4,
+        InventoryItemData = 1 << 4,
         CurrentPlayersX = 1 << 5,
     }
 
@@ -171,7 +171,7 @@ namespace Zutatensuppe.D2Reader
 
         public DataReaderEnableFlags ReadFlags { get; set; } =
             DataReaderEnableFlags.CurrentArea
-            | DataReaderEnableFlags.EquippedItemStrings
+            | DataReaderEnableFlags.InventoryItemData
             | DataReaderEnableFlags.CurrentDifficulty
             | DataReaderEnableFlags.CurrentPlayersX
             | DataReaderEnableFlags.QuestBuffers
@@ -512,7 +512,7 @@ namespace Zutatensuppe.D2Reader
 
         StructuredInventory ProcessInventory()
         {
-            return ReadFlags.HasFlag(DataReaderEnableFlags.EquippedItemStrings)
+            return ReadFlags.HasFlag(DataReaderEnableFlags.InventoryItemData)
                 ? GatherInventory()
                 : new StructuredInventory();
         }
@@ -525,7 +525,13 @@ namespace Zutatensuppe.D2Reader
 
             InventoryReader inventoryReader = unitReader.inventoryReader;
             ItemReader itemReader = inventoryReader.ItemReader;
-            foreach (D2Unit item in inventoryReader.EnumerateInventoryBackward(player))
+            foreach (D2Unit item in inventoryReader.EnumerateInventoryBackward(player, (D2ItemData item) =>
+            {
+                // Because PlugY stashes can be huge, and this is slow...
+                // If I ever track items looted then I'll have to just
+                // watch items as they enter the inventory
+                return item.InvPage != InventoryPage.Stash;
+            }))
             {
                 StructuredItemData structuredItem = new StructuredItemData
                 {
