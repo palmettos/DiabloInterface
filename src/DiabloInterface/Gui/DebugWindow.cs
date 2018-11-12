@@ -51,7 +51,7 @@ namespace Zutatensuppe.DiabloInterface.Gui
                 UnregisterServiceEventHandlers();
 
                 // D2IDBackendService needs to keep this flag enabled
-                //DisableReaderDebugData();
+                // DisableReaderDebugData();
             };
 
             InitializeComponent();

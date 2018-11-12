@@ -370,7 +370,7 @@ namespace Zutatensuppe.D2Reader.Readers
                 case ItemQuality.Set:
                     // fullName: prefix + name
                     fullName = ExtractGrammaticalCase(GetItemSetName(item), grammarCase);
-                    fullName += " " + name;
+                    //fullName += " " + name;
                     break;
                 case ItemQuality.Rare:
                 case ItemQuality.Crafted:
@@ -382,13 +382,13 @@ namespace Zutatensuppe.D2Reader.Readers
                     {
                         words.Add(rarePrefix);
                         words.Add(rareSuffix);
-                        words.Add(name);
+                        //words.Add(name);
                     }
                     else
                     {
                         words.Add(rareSuffix);
                         words.Add(rarePrefix);
-                        words.Add(name);
+                        //words.Add(name);
                     }
                     fullName = string.Join(" ", words.Where(s => !string.IsNullOrEmpty(s)));
                     break;
@@ -402,7 +402,7 @@ namespace Zutatensuppe.D2Reader.Readers
                     {
                         // fullName: prefix + name
                         fullName = ExtractGrammaticalCase(GetItemUniqueName(item), grammarCase);
-                        fullName += " " + name;
+                        //fullName += " " + name;
                     }
                     break;
                 default: return null;
