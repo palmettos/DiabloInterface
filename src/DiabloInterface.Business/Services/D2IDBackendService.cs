@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -33,6 +34,20 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
+    public class SkillState
+    {
+        public OrderedDictionary state;
+        public HashSet<string> skillNames;
+        public HashSet<int> skillLevels;
+
+        public SkillState()
+        {
+            state = new OrderedDictionary();
+            skillNames = new HashSet<string>();
+            skillLevels = new HashSet<int>();
+        }
+    }
+
     public class D2IDBackendService
     {
         static readonly ILogger Logger = LogServiceLocator.Get(MethodBase.GetCurrentMethod().DeclaringType);
@@ -41,7 +56,8 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         private static readonly HttpClient client = new HttpClient();
         string baseURI;
 
-        InventoryState currentState = new InventoryState();
+        InventoryState currentInventoryState = new InventoryState();
+        SkillState currentSkillState = new SkillState();
 
         public D2IDBackendService(ISettingsService settingsService, IGameService gameService)
         {
@@ -65,6 +81,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         async void D2IDOnDataRead(object sender, DataReadEventArgs e)
         {
             bool equippedItemsChanged = false;
+            bool skillLevelsChanged = false;
+
+            // START INVENTORY CHECK
             Dictionary<int, StructuredItemData> equippedItems = e.structuredInventory.filter((StructuredItemData item) =>
             {
                 return item.location != "None" && item.page == "Equipped";
@@ -77,41 +96,76 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                 newEquippedHash.Add(str);
             }
 
-            currentState.equipmentStateHash.SymmetricExceptWith(newEquippedHash);
-            if (currentState.equipmentStateHash.Count > 0)
+            currentInventoryState.equipmentStateHash.SymmetricExceptWith(newEquippedHash);
+            if (currentInventoryState.equipmentStateHash.Count > 0)
             {
                 Logger.Info("Equipped items changed");
                 equippedItemsChanged = true;
             }
-            currentState.equipmentStateHash = newEquippedHash;
-            currentState.equipmentState = equippedItems;
+            currentInventoryState.equipmentStateHash = newEquippedHash;
+            currentInventoryState.equipmentState = equippedItems;
 
             HashSet<string> charmBases = new HashSet<string> { "Small Charm", "Large Charm", "Grand Charm" };
             Dictionary<int, StructuredItemData> equippedCharms = e.structuredInventory.filter((StructuredItemData item) =>
             {
-                return item.page == "Inventory" && charmBases.Contains(item.baseName);
+                return item.page == "Inventory" && charmBases.Contains(item.baseName) && item.properties.Count > 0;
             });
 
             HashSet<int> newCharmsHash = new HashSet<int>(equippedCharms.Keys);
-            currentState.charmStateHash.SymmetricExceptWith(newCharmsHash);
-            if (currentState.charmStateHash.Count > 0)
+            currentInventoryState.charmStateHash.SymmetricExceptWith(newCharmsHash);
+            if (currentInventoryState.charmStateHash.Count > 0)
             {
                 Logger.Info("Equipped charms changed");
                 equippedItemsChanged = true;
             }
-            currentState.charmStateHash = newCharmsHash;
-            currentState.charmState = equippedCharms;
+            currentInventoryState.charmStateHash = newCharmsHash;
+            currentInventoryState.charmState = equippedCharms;
+            // END INVENTORY CHECK
 
+            // START SKILL CHECK
+            HashSet<string> newSkillNames = new HashSet<string>();
+            foreach (string key in e.skillLevels.Keys)
+            {
+                newSkillNames.Add(key);
+            }
+            HashSet<int> newSkillLevels = new HashSet<int>();
+            foreach (int val in e.skillLevels.Values)
+            {
+                newSkillLevels.Add(val);
+            }
+
+            currentSkillState.skillNames.SymmetricExceptWith(newSkillNames);
+            currentSkillState.skillLevels.SymmetricExceptWith(newSkillLevels);
+            if (currentSkillState.skillNames.Count > 0 || currentSkillState.skillLevels.Count > 0)
+            {
+                Logger.Info("Skill state changed");
+                skillLevelsChanged = true;
+            }
+            currentSkillState.skillNames = newSkillNames;
+            currentSkillState.skillLevels = newSkillLevels;
+            // END SKILL CHECK
+
+            // TODO: JSON stringify all objects synchronously before awaiting any Task
+            // and pass JSON strings into async calls because underlying state
+            // can be modified while a Task is awaited.
+            // This serialization makes input object deterministic regardless
+            // of network latency or the state of the event loop.
+            // (Not necessarily input ORDER, but that's okay. DB will index by timestamp.)
             if (equippedItemsChanged)
             {
-                await ProcessInventoryChange(currentState);
+                await ProcessInventoryChange(currentInventoryState);
+            }
+            if (skillLevelsChanged)
+            {
+                await ProcessSkillChange();
             }
         }
 
         // Data that should be sent when the inventory state changes
+        // TODO: Rewrite to accept stringified JSON as input
         async Task ProcessInventoryChange(InventoryState inventoryState)
         {
-            // Construct inventory JSON object and send to backend asynchronously
+            // Receive JSON object and send to backend asynchronously
             string json = JsonConvert.SerializeObject(inventoryState);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await client.PostAsync("http://" + baseURI + ":8080/snapshots/equipped/test/test", content);
@@ -120,13 +174,18 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
 
         // Data that should be sent when the character's stats change
-        void ProcessCharacterStatChange()
+        async Task ProcessCharacterStatChange()
         {
 
         }
 
         // Data that should be sent when the character levels up
-        void ProcessCharacterLevelUp()
+        async Task ProcessCharacterLevelUp()
+        {
+
+        }
+
+        async Task ProcessSkillChange()
         {
 
         }

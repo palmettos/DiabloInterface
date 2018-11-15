@@ -2,6 +2,7 @@ using Zutatensuppe.D2Reader.Struct;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Reflection;
 using Zutatensuppe.D2Reader.Struct.Item;
 using Zutatensuppe.D2Reader.Struct.Skill;
@@ -128,9 +129,9 @@ namespace Zutatensuppe.D2Reader.Readers
         }
         
 
-        public Dictionary<int, D2Skill> GetSkillMap(D2Unit unit)
+        public OrderedDictionary GetSkillMap(D2Unit unit)
         {
-            Dictionary<int, D2Skill> skills = new Dictionary<int, D2Skill>();
+            OrderedDictionary skills = new OrderedDictionary();
             foreach (D2Skill skill in skillReader.EnumerateSkills(unit))
             {
                 int numberOfSkillPoints = skillReader.GetTotalNumberOfSkillPoints(skill);
@@ -141,11 +142,10 @@ namespace Zutatensuppe.D2Reader.Readers
                     {
                         string skillName = skillReader.GetSkillName((ushort)skillData.SkillId);
                         int skillPoints = skill.numberOfSkillPoints;
-                        // Logger.Info(skillName + " " + skillPoints.ToString());
+                        skills.Add(skillName, skillPoints);
                     }
                 }
             }
-
             return skills;
         }
 

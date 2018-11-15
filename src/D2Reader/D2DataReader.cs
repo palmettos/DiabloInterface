@@ -2,6 +2,7 @@ namespace Zutatensuppe.D2Reader
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.Specialized;
     using System.Linq;
     using System.Reflection;
     using System.Text;
@@ -27,6 +28,7 @@ namespace Zutatensuppe.D2Reader
         InventoryItemIds = 1 << 3,
         InventoryItemData = 1 << 4,
         CurrentPlayersX = 1 << 5,
+        SkillLevels = 1 << 6
     }
 
     public class CharacterCreatedEventArgs : EventArgs
@@ -95,6 +97,7 @@ namespace Zutatensuppe.D2Reader
     {
         public Character Character { get; }
         public StructuredInventory structuredInventory { get; }
+        public OrderedDictionary skillLevels { get; }
         public int CurrentArea { get; }
         public int CurrentPlayersX { get; }
         public GameDifficulty CurrentDifficulty { get; }
@@ -105,6 +108,7 @@ namespace Zutatensuppe.D2Reader
         public DataReadEventArgs(
             Character character,
             StructuredInventory inventory,
+            OrderedDictionary skills,
             int currentArea,
             GameDifficulty currentDifficulty,
             int currentPlayersX,
@@ -114,6 +118,7 @@ namespace Zutatensuppe.D2Reader
         {
             Character = character;
             structuredInventory = inventory;
+            skillLevels = skills;
             CurrentArea = currentArea;
             CurrentDifficulty = currentDifficulty;
             CurrentPlayersX = currentPlayersX;
@@ -172,6 +177,7 @@ namespace Zutatensuppe.D2Reader
         public DataReaderEnableFlags ReadFlags { get; set; } =
             DataReaderEnableFlags.CurrentArea
             | DataReaderEnableFlags.InventoryItemData
+            | DataReaderEnableFlags.SkillLevels
             | DataReaderEnableFlags.CurrentDifficulty
             | DataReaderEnableFlags.CurrentPlayersX
             | DataReaderEnableFlags.QuestBuffers
@@ -446,6 +452,7 @@ namespace Zutatensuppe.D2Reader
             OnDataRead(new DataReadEventArgs(
                 CurrentCharacter,
                 ProcessInventory(),
+                ProcessSkills(),
                 ProcessCurrentArea(),
                 currentDifficulty,
                 ProcessCurrentPlayersX(),
@@ -515,6 +522,19 @@ namespace Zutatensuppe.D2Reader
             return ReadFlags.HasFlag(DataReaderEnableFlags.InventoryItemData)
                 ? GatherInventory()
                 : new StructuredInventory();
+        }
+
+        OrderedDictionary ProcessSkills()
+        {
+            return ReadFlags.HasFlag(DataReaderEnableFlags.SkillLevels)
+                ? GatherSkills()
+                : new OrderedDictionary();
+        }
+
+        OrderedDictionary GatherSkills()
+        {
+            var player = unitReader.GetPlayer();
+            return unitReader.GetSkillMap(player);
         }
 
         StructuredInventory GatherInventory()
