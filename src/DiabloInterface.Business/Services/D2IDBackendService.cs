@@ -15,10 +15,22 @@ using Newtonsoft.Json;
 
 namespace Zutatensuppe.DiabloInterface.Business.Services
 {
-    public class InventorySnapshot
+    public class InventoryState
     {
-        public Dictionary<string, StructuredItemData> equipmentState;
+        public HashSet<string> equipmentStateHash;
+        public Dictionary<int, StructuredItemData> equipmentState;
+
+        public HashSet<int> charmStateHash;
         public Dictionary<int, StructuredItemData> charmState;
+
+        public InventoryState()
+        {
+            equipmentStateHash = new HashSet<string>();
+            equipmentState = new Dictionary<int, StructuredItemData>();
+
+            charmStateHash = new HashSet<int>();
+            charmState = new Dictionary<int, StructuredItemData>();
+        }
     }
 
     public class D2IDBackendService
@@ -27,9 +39,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         readonly ISettingsService settingsService;
         readonly IGameService gameService;
         private static readonly HttpClient client = new HttpClient();
-        Dictionary<string, StructuredItemData> lastEquippedItemState;
-        Dictionary<int, StructuredItemData> lastEquippedCharmState;
         string baseURI;
+
+        InventoryState currentState = new InventoryState();
 
         public D2IDBackendService(ISettingsService settingsService, IGameService gameService)
         {
@@ -37,17 +49,6 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             this.gameService = gameService ?? throw new ArgumentNullException(nameof(gameService));
             RegisterServiceEventHandlers();
-
-            lastEquippedItemState = new Dictionary<string, StructuredItemData>();
-            foreach (BodyLocation location in Enum.GetValues(typeof(BodyLocation)))
-            {
-                if (location != BodyLocation.None)
-                {
-                    lastEquippedItemState[location.ToString()] = null;
-                }
-            }
-
-            lastEquippedCharmState = new Dictionary<int, StructuredItemData>();
 
 #if DEBUG
             baseURI = "localhost";
@@ -63,92 +64,57 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         async void D2IDOnDataRead(object sender, DataReadEventArgs e)
         {
-            //*** START INVENTORY CHECK
-            Dictionary<int, StructuredItemData> equippedItemsTemp = e.structuredInventory.filter((StructuredItemData item) =>
+            bool equippedItemsChanged = false;
+            Dictionary<int, StructuredItemData> equippedItems = e.structuredInventory.filter((StructuredItemData item) =>
             {
                 return item.location != "None" && item.page == "Equipped";
             });
 
-            // Invert the item state into BodyLoc -> StructuredItemData pairs
-            Dictionary<string, StructuredItemData> equippedItems = new Dictionary<string, StructuredItemData>();
-            foreach (StructuredItemData item in equippedItemsTemp.Values)
+            HashSet<string> newEquippedHash = new HashSet<string>();
+            foreach (var item in equippedItems.Values)
             {
-                equippedItems[item.location] = item;
+                string str = item.location + item.asString();
+                newEquippedHash.Add(str);
             }
 
-            // Update the equipped item state
-            bool inventoryStateDidChange = false;
-            foreach (string location in lastEquippedItemState.Keys.ToArray())
+            currentState.equipmentStateHash.SymmetricExceptWith(newEquippedHash);
+            if (currentState.equipmentStateHash.Count > 0)
             {
-                if (equippedItems.ContainsKey(location))
-                {
-                    if (lastEquippedItemState[location] == null || lastEquippedItemState[location].guid != equippedItems[location].guid)
-                    {
-                        lastEquippedItemState[location] = equippedItems[location];
-                        Logger.Info("Overwrote " + location);
-                        inventoryStateDidChange = true;
-                    }
-                }
-                else
-                {
-                    if (lastEquippedItemState[location] != null)
-                    {
-                        lastEquippedItemState[location] = null;
-                        Logger.Info("Removed " + location);
-                        inventoryStateDidChange = true;
-                    }
-                }
+                Logger.Info("Equipped items changed");
+                equippedItemsChanged = true;
             }
+            currentState.equipmentStateHash = newEquippedHash;
+            currentState.equipmentState = equippedItems;
 
-            // Get the inventory charm state
-            HashSet<string> charmBaseNames = new HashSet<string> { "Small Charm", "Large Charm", "Grand Charm" };
+            HashSet<string> charmBases = new HashSet<string> { "Small Charm", "Large Charm", "Grand Charm" };
             Dictionary<int, StructuredItemData> equippedCharms = e.structuredInventory.filter((StructuredItemData item) =>
             {
-                return charmBaseNames.Contains(item.baseName) && item.page != "Stash" && item.properties.Count > 0;
+                return item.page == "Inventory" && charmBases.Contains(item.baseName);
             });
 
-            // Update the inventory charm state
-            HashSet<int> updateGuids = new HashSet<int>(lastEquippedCharmState.Keys);
-            HashSet<int> currGuids = new HashSet<int>(equippedCharms.Keys);
-            updateGuids.SymmetricExceptWith(currGuids);
-            foreach (int guid in updateGuids)
+            HashSet<int> newCharmsHash = new HashSet<int>(equippedCharms.Keys);
+            currentState.charmStateHash.SymmetricExceptWith(newCharmsHash);
+            if (currentState.charmStateHash.Count > 0)
             {
-                if (lastEquippedCharmState.Keys.Contains(guid))
-                {
-                    lastEquippedCharmState.Remove(guid);
-                    Logger.Info("Removed charm: " + guid.ToString());
-                    inventoryStateDidChange = true;
-                }
-                if (equippedCharms.Keys.Contains(guid))
-                {
-                    lastEquippedCharmState[guid] = equippedCharms[guid];
-                    Logger.Info("Added charm: " + guid.ToString());
-                    inventoryStateDidChange = true;
-                }
+                Logger.Info("Equipped charms changed");
+                equippedItemsChanged = true;
             }
+            currentState.charmStateHash = newCharmsHash;
+            currentState.charmState = equippedCharms;
 
-            // Process inventory state change event
-            if (inventoryStateDidChange)
+            if (equippedItemsChanged)
             {
-                InventorySnapshot inventoryState = new InventorySnapshot
-                {
-                    equipmentState = lastEquippedItemState,
-                    charmState = lastEquippedCharmState
-                };
-                await ProcessInventoryChange(inventoryState);
+                await ProcessInventoryChange(currentState);
             }
-            //*** END INVENTORY CHECK
-
-
         }
 
         // Data that should be sent when the inventory state changes
-        async Task ProcessInventoryChange(InventorySnapshot inventoryState)
+        async Task ProcessInventoryChange(InventoryState inventoryState)
         {
             // Construct inventory JSON object and send to backend asynchronously
             string json = JsonConvert.SerializeObject(inventoryState);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await client.PostAsync("http://" + baseURI + ":8080/snapshots/test/test/equipped", content);
+            var response = await client.PostAsync("http://" + baseURI + ":8080/snapshots/equipped/test/test", content);
             var responseStr = await response.Content.ReadAsStringAsync();
             Logger.Info("Response: " + responseStr);
         }

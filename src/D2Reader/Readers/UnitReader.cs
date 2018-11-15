@@ -2,14 +2,18 @@ using Zutatensuppe.D2Reader.Struct;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
 using Zutatensuppe.D2Reader.Struct.Item;
 using Zutatensuppe.D2Reader.Struct.Skill;
 using Zutatensuppe.D2Reader.Struct.Stat;
+using Zutatensuppe.DiabloInterface.Core.Logging;
 
 namespace Zutatensuppe.D2Reader.Readers
 {
     public class UnitReader
     {
+        static readonly ILogger Logger = LogServiceLocator.Get(MethodBase.GetCurrentMethod().DeclaringType);
+
         protected ProcessMemoryReader reader;
         protected GameMemoryTable memory;
         protected StringLookupTable stringReader;
@@ -137,6 +141,7 @@ namespace Zutatensuppe.D2Reader.Readers
                     {
                         string skillName = skillReader.GetSkillName((ushort)skillData.SkillId);
                         int skillPoints = skill.numberOfSkillPoints;
+                        // Logger.Info(skillName + " " + skillPoints.ToString());
                     }
                 }
             }

@@ -520,6 +520,7 @@ namespace Zutatensuppe.D2Reader
         StructuredInventory GatherInventory()
         {
             var player = unitReader.GetPlayer();
+            unitReader.GetSkillMap(player);
             StructuredInventory inventory = new StructuredInventory();
             if (player == null) return inventory;
 
