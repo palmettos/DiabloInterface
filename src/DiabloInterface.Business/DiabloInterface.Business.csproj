@@ -59,7 +59,7 @@
     <Compile Include="KeyManager.cs" />
     <Compile Include="Services\AutoSplitService.cs" />
     <Compile Include="Services\CharacterStatFileWriterService.cs" />
-    <Compile Include="Services\D2IDBackendService.cs" />
+    <Compile Include="Services\NSTBackendService.cs" />
     <Compile Include="Services\GameService.cs" />
     <Compile Include="Services\IAutoSplitService.cs" />
     <Compile Include="Services\IGameService.cs" />

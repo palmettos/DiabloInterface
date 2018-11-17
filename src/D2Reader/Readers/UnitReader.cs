@@ -129,7 +129,7 @@ namespace Zutatensuppe.D2Reader.Readers
         }
         
 
-        public OrderedDictionary GetSkillMap(D2Unit unit)
+        public OrderedDictionary GetSkillLevels(D2Unit unit)
         {
             OrderedDictionary skills = new OrderedDictionary();
             foreach (D2Skill skill in skillReader.EnumerateSkills(unit))

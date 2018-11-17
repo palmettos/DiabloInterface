@@ -534,13 +534,12 @@ namespace Zutatensuppe.D2Reader
         OrderedDictionary GatherSkills()
         {
             var player = unitReader.GetPlayer();
-            return unitReader.GetSkillMap(player);
+            return unitReader.GetSkillLevels(player);
         }
 
         StructuredInventory GatherInventory()
         {
             var player = unitReader.GetPlayer();
-            unitReader.GetSkillMap(player);
             StructuredInventory inventory = new StructuredInventory();
             if (player == null) return inventory;
 
