@@ -41,11 +41,12 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
     public interface INSTEndpointHandler
     {
+        string getURI();
         void updateURI(string channelName, string characterName);
         void processGameState(DataReadEventArgs state);
         bool isSendRequired();
         string getSerializedPayload();
-        Task sendSnapshot(HttpClient client, string packet);
+        Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet);
     }
 
     public class EquippedEndpointHandler: INSTEndpointHandler
@@ -69,6 +70,11 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             sendRequired = false;
         }
 
+        public string getURI()
+        {
+            return uri.getURI();
+        }
+
         public void updateURI(string channelName, string characterName)
         {
             uri.setPath("/snapshots/equipped/" + channelName + "/" + characterName);
@@ -76,7 +82,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void processGameState(DataReadEventArgs state)
         {
-            bool equippedItemsChanged = false;
+            sendRequired = false;
 
             Dictionary<int, StructuredItemData> newEquippedItems = state.structuredInventory.filter((StructuredItemData item) =>
             {
@@ -93,8 +99,8 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             hashedEquipmentState.SymmetricExceptWith(newHashedEquipped);
             if (hashedEquipmentState.Count > 0)
             {
-                equippedItemsChanged = true;
-                logger.Info("Item state changed...");
+                sendRequired = true;
+                logger.Info("Item state changed, send required...");
             }
             hashedEquipmentState = newHashedEquipped;
             equipmentState = newEquippedItems;
@@ -109,17 +115,11 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             hashedCharmState.SymmetricExceptWith(newCharmsHash);
             if (hashedCharmState.Count > 0)
             {
-                equippedItemsChanged = true;
-                logger.Info("Item state changed...");
+                sendRequired = true;
+                logger.Info("Charm state changed, send required...");
             }
             hashedCharmState = newCharmsHash;
             charmState = newEquippedCharms;
-
-            if (equippedItemsChanged)
-            {
-                sendRequired = true;
-                logger.Info("Equipped state send required.");
-            }
         }
 
         public bool isSendRequired()
@@ -132,14 +132,12 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return JsonConvert.SerializeObject(equipmentState.Values.Concat(charmState.Values));
         }
 
-        public async Task sendSnapshot(HttpClient client, string packet)
+        public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
         {
-            logger.Info("Sending packet to: " + uri.getURI());
+            logger.Info("Sending packet to: " + dest);
             var content = new StringContent(packet, Encoding.UTF8, "application/json");
-            var response = await client.PostAsync(uri.getURI(), content);
-            var responseStr = await response.Content.ReadAsStringAsync();
-            logger.Info(responseStr);
-            sendRequired = false;
+            HttpResponseMessage response = await client.PostAsync(dest, content);
+            return response;
         }
     }
 
@@ -161,6 +159,12 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             sendRequired = false;
         }
 
+        public string getURI()
+        {
+            return uri.getURI();
+        }
+
+
         public void updateURI(string channelName, string characterName)
         {
             uri.setPath("/snapshots/skills/" + channelName + "/" + characterName);
@@ -168,7 +172,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void processGameState(DataReadEventArgs state)
         {
-            bool skillLevelsChanged = false;
+            sendRequired = false;
             HashSet<string> newSkillNames = new HashSet<string>();
             foreach (string key in state.skillLevels.Keys)
             {
@@ -184,17 +188,13 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             hashedSkillLevels.SymmetricExceptWith(newSkillLevels);
             if (hashedSkillNames.Count > 0 || hashedSkillLevels.Count > 0)
             {
-                logger.Info("Skill state changed");
-                skillLevelsChanged = true;
+                logger.Info("Skill state changed, send required...");
+                sendRequired = true;
             }
             hashedSkillNames = newSkillNames;
             hashedSkillLevels = newSkillLevels;
 
-            if (skillLevelsChanged)
-            {
-                sendRequired = true;
-                logger.Info("Skills state send required.");
-            }
+            skillState = state.skillLevels;
         }
 
         public bool isSendRequired()
@@ -207,13 +207,12 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return JsonConvert.SerializeObject(skillState);
         }
 
-        public async Task sendSnapshot(HttpClient client, string packet)
+        public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
         {
+            logger.Info("Sending skills snapshot to: " + dest);
             var content = new StringContent(packet, Encoding.UTF8, "application/json");
-            var response = await client.PostAsync(uri.getURI(), content);
-            var responseStr = await response.Content.ReadAsStringAsync();
-            logger.Info(responseStr);
-            sendRequired = false;
+            HttpResponseMessage response = await client.PostAsync(dest, content);
+            return response;
         }
     }
 
@@ -246,9 +245,6 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         private static readonly HttpClient client = new HttpClient();
         private List<INSTEndpointHandler> handlers;
 
-        private int healingPotionCount;
-        private int manaPotionCount;
-
         public NSTBackendService(ISettingsService settingsService, IGameService gameService)
         {
             logger.Info("Creating NST backend service.");
@@ -261,9 +257,6 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                 new EquippedEndpointHandler(logger),
                 new SkillsEndpointHandler(logger)
             };
-
-            int healingPotionCount = 0;
-            int manaPotionCount = 0;
         }
 
         void RegisterServiceEventHandlers()
@@ -273,35 +266,33 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         async void NSTOnDataRead(object sender, DataReadEventArgs e)
         {
-            Dictionary<INSTEndpointHandler, string> sendingHandlers = new Dictionary<INSTEndpointHandler, string>();
+            Queue<Dictionary<string, object>> sendingHandlers = new Queue<Dictionary<string, object>>();
+            // Perform all steps that are required to be synchronous
             foreach (var handler in handlers)
             {
                 handler.updateURI("test_channel", e.Character.Name);
                 handler.processGameState(e);
                 if (handler.isSendRequired())
                 {
+                    string uri = handler.getURI();
                     string payload = handler.getSerializedPayload();
                     NSTPacket packet = new NSTPacket("test_channel", e.Character, payload);
-                    sendingHandlers[handler] = packet.asJson();
+                    Dictionary<string, object> handlerState = new Dictionary<string, object>();
+                    handlerState["handler"] = handler;
+                    handlerState["uri"] = uri;
+                    handlerState["packet"] = packet.asJson();
+                    sendingHandlers.Enqueue(handlerState);
                 }
             }
 
-            foreach (var handler in sendingHandlers.Keys)
+            while (sendingHandlers.Count > 0)
             {
-                await handler.sendSnapshot(client, sendingHandlers[handler]);
+                Dictionary<string, object> currentHandler = sendingHandlers.Dequeue();
+                string uri = (string)currentHandler["uri"];
+                string packet = (string)currentHandler["packet"];
+                var response = await ((INSTEndpointHandler)currentHandler["handler"]).sendSnapshot(client, uri, packet);
+                logger.Info(response.StatusCode.ToString());
             }
-
-            //// START POTION COUNTING
-            //Dictionary<int, StructuredItemData> healingPotions = e.structuredInventory.filter((StructuredItemData item) =>
-            //{
-            //    return item.baseName.Contains("Healing Potion");
-            //});
-
-            //Dictionary<int, StructuredItemData> manaPotions = e.structuredInventory.filter((StructuredItemData item) =>
-            //{
-            //    return item.baseName.Contains("Mana Potion");
-            //});
-            //// END POTION COUNTING
         }
     }
 }
