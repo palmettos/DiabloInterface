@@ -45,7 +45,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         void updateURI(string channelName, string characterName);
         void processGameState(DataReadEventArgs state);
         bool isSendRequired();
-        string getSerializedPayload();
+        NSTPacket getPacket(string channel, Character character);
         Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet);
     }
 
@@ -127,9 +127,10 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return sendRequired;
         }
 
-        public string getSerializedPayload()
+        public NSTPacket getPacket(string channel, Character character)
         {
-            return JsonConvert.SerializeObject(equipmentState.Values.Concat(charmState.Values));
+            return new NSTPacket(channel, character, equipmentState.Values.Concat(charmState.Values));
+
         }
 
         public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
@@ -202,9 +203,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return sendRequired;
         }
 
-        public string getSerializedPayload()
+        public NSTPacket getPacket(string channel, Character character)
         {
-            return JsonConvert.SerializeObject(skillState);
+            return new NSTPacket(channel, character, skillState);
         }
 
         public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
@@ -220,7 +221,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
     {
         public Dictionary<string, object> data;
 
-        public NSTPacket(string channel, Character character, string payload)
+        public NSTPacket(string channel, Character character, object payload)
         {
             data = new Dictionary<string, object>();
             data["timestamp"] = Utility.GetUnixTimestamp();
@@ -275,8 +276,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                 if (handler.isSendRequired())
                 {
                     string uri = handler.getURI();
-                    string payload = handler.getSerializedPayload();
-                    NSTPacket packet = new NSTPacket("test_channel", e.Character, payload);
+                    NSTPacket packet = handler.getPacket("test_channel", e.Character);
                     Dictionary<string, object> handlerState = new Dictionary<string, object>();
                     handlerState["handler"] = handler;
                     handlerState["uri"] = uri;
