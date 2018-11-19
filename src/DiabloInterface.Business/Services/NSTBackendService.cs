@@ -77,7 +77,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/snapshots/equipped/" + channelName + "/" + characterName);
+            uri.setPath("/snapshots/items");
         }
 
         public void processGameState(DataReadEventArgs state)
@@ -168,7 +168,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/snapshots/skills/" + channelName + "/" + characterName);
+            uri.setPath("/snapshots/skills");
         }
 
         public void processGameState(DataReadEventArgs state)
@@ -224,7 +224,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         public NSTPacket(string channel, Character character, object payload)
         {
             data = new Dictionary<string, object>();
-            data["timestamp"] = Utility.GetUnixTimestamp();
+            // I'll come back to this in the future if not having a timestamp
+            // actually becomes an issue.
+            // data["timestamp"] = Utility.GetUnixTimestamp();
             data["channel"] = channel;
             data["characterName"] = character.Name;
             data["characterClass"] = character.CharClass.ToString();
@@ -281,6 +283,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                     handlerState["handler"] = handler;
                     handlerState["uri"] = uri;
                     handlerState["packet"] = packet.asJson();
+                    logger.Info(handlerState["packet"]);
                     sendingHandlers.Enqueue(handlerState);
                 }
             }
