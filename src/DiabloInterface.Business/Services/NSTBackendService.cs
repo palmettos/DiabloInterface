@@ -49,6 +49,84 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet);
     }
 
+    public class GoldEndpointHandler: INSTEndpointHandler
+    {
+        private NSTEndpoint uri;
+        private ILogger logger;
+        private Dictionary<string, int> values;
+        private bool sendRequired;
+        private bool initialized;
+        private string characterName;
+
+        public GoldEndpointHandler(ILogger logger)
+        {
+            this.logger = logger;
+            uri = new NSTEndpoint();
+            values = new Dictionary<string, int>();
+            values["currentGold"] = 0;
+            values["delta"] = 0;
+            sendRequired = false;
+            initialized = false;
+            characterName = null;
+        }
+
+        public string getURI()
+        {
+            return uri.getURI();
+        }
+
+        // TODO: Remove this method from the interface as it's no longer needed
+        public void updateURI(string channelName, string characterName)
+        {
+            uri.setPath("/snapshots/gold");
+        }
+
+        public void processInitialState(DataReadEventArgs state)
+        {
+            characterName = state.Character.Name;
+            values["currentGold"] = state.Character.Gold + state.Character.GoldStash;
+            values["delta"] = 0;
+            initialized = true;
+        }
+
+        public void processGameState(DataReadEventArgs state)
+        {
+            sendRequired = false;
+            if (!initialized || !characterName.Equals(state.Character.Name))
+            {
+                processInitialState(state);
+                return;
+            }
+
+            int newGold = state.Character.Gold + state.Character.GoldStash;
+            if (values["currentGold"] != newGold)
+            {
+                values["delta"] = newGold - values["currentGold"];
+                values["currentGold"] = newGold;
+                sendRequired = true;
+            }
+        }
+
+        public bool isSendRequired()
+        {
+            return sendRequired;
+        }
+
+        public NSTPacket getPacket(string channel, Character character)
+        {
+            return new NSTPacket(channel, character, values);
+
+        }
+
+        public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
+        {
+            logger.Info("Sending packet to: " + dest);
+            var content = new StringContent(packet, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = await client.PostAsync(dest, content);
+            return response;
+        }
+    }
+
     public class EquippedEndpointHandler: INSTEndpointHandler
     {
         private NSTEndpoint uri;
@@ -258,7 +336,8 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             handlers = new List<INSTEndpointHandler>
             {
                 new EquippedEndpointHandler(logger),
-                new SkillsEndpointHandler(logger)
+                new SkillsEndpointHandler(logger),
+                new GoldEndpointHandler(logger)
             };
         }
 
