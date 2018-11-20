@@ -49,6 +49,91 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet);
     }
 
+    public class AttributesEndpointHandler : INSTEndpointHandler
+    {
+        private NSTEndpoint uri;
+        private ILogger logger;
+        private Dictionary<string, int> values;
+        private bool sendRequired;
+
+        public AttributesEndpointHandler(ILogger logger)
+        {
+            this.logger = logger;
+            uri = new NSTEndpoint();
+            values = new Dictionary<string, int>();
+        }
+
+        public string getURI()
+        {
+            return uri.getURI();
+        }
+
+        public void updateURI(string channelName, string characterName)
+        {
+            uri.setPath("/snapshots/attributes");
+        }
+
+        public void processGameState(DataReadEventArgs state)
+        {
+            sendRequired = false;
+            HashSet<int> newValues = new HashSet<int>
+            {
+                state.Character.Strength,
+                state.Character.Dexterity,
+                state.Character.Vitality,
+                state.Character.Energy,
+
+                state.Character.FireResist,
+                state.Character.ColdResist,
+                state.Character.LightningResist,
+                state.Character.PoisonResist,
+
+                state.Character.FasterHitRecovery,
+                state.Character.FasterRunWalk,
+                state.Character.FasterCastRate,
+                state.Character.IncreasedAttackSpeed
+            };
+
+            HashSet<int> oldValues = new HashSet<int>(values.Values);
+            oldValues.SymmetricExceptWith(newValues);
+            if (oldValues.Count > 0)
+            {
+                values = new Dictionary<string, int>();
+                values["strength"] = state.Character.Strength;
+                values["dexterity"] = state.Character.Dexterity;
+                values["vitality"] = state.Character.Vitality;
+                values["energy"] = state.Character.Energy;
+                values["fireResist"] = state.Character.FireResist;
+                values["coldResist"] = state.Character.ColdResist;
+                values["lightningResist"] = state.Character.LightningResist;
+                values["poisonResist"] = state.Character.PoisonResist;
+                values["fasterHitRecovery"] = state.Character.FasterHitRecovery;
+                values["fasterRunWalk"] = state.Character.FasterRunWalk;
+                values["fasterCastRate"] = state.Character.FasterCastRate;
+                values["increasedAttackSpeed"] = state.Character.IncreasedAttackSpeed;
+                sendRequired = true;
+            }
+        }
+
+        public bool isSendRequired()
+        {
+            return sendRequired;
+        }
+
+        public NSTPacket getPacket(string channel, Character character)
+        {
+            return new NSTPacket(channel, character, values);
+        }
+
+        public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
+        {
+            logger.Info("Sending packet to: " + dest);
+            var content = new StringContent(packet, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = await client.PostAsync(dest, content);
+            return response;
+        }
+    }
+
     public class GoldEndpointHandler: INSTEndpointHandler
     {
         private NSTEndpoint uri;
@@ -337,7 +422,8 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             {
                 new EquippedEndpointHandler(logger),
                 new SkillsEndpointHandler(logger),
-                new GoldEndpointHandler(logger)
+                new GoldEndpointHandler(logger),
+                new AttributesEndpointHandler(logger)
             };
         }
 
