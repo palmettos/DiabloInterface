@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Zutatensuppe.DiabloInterface.Business.Services
 {
-    public class NSTEndpoint
+    public class SSEndpoint
     {
         private string scheme = "http";
         private string authority = "//localhost:8080";
@@ -39,19 +39,19 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
-    public interface INSTEndpointHandler
+    public interface ISSEndpointHandler
     {
         string getURI();
         void updateURI(string channelName, string characterName);
         void processGameState(DataReadEventArgs state);
         bool isSendRequired();
-        NSTPacket getPacket(string channel, Character character);
+        SSPacket getPacket(string channel, Character character);
         Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet);
     }
 
-    public class AttributesEndpointHandler : INSTEndpointHandler
+    public class AttributesEndpointHandler : ISSEndpointHandler
     {
-        private NSTEndpoint uri;
+        private SSEndpoint uri;
         private ILogger logger;
         private Dictionary<string, int> values;
         private bool sendRequired;
@@ -59,8 +59,21 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         public AttributesEndpointHandler(ILogger logger)
         {
             this.logger = logger;
-            uri = new NSTEndpoint();
+            uri = new SSEndpoint();
+
             values = new Dictionary<string, int>();
+            values["strength"] = 0;
+            values["dexterity"] = 0;
+            values["vitality"] = 0;
+            values["energy"] = 0;
+            values["fireResist"] = 0;
+            values["coldResist"] = 0;
+            values["lightningResist"] = 0;
+            values["poisonResist"] = 0;
+            values["fasterHitRecovery"] = 0;
+            values["fasterRunWalk"] = 0;
+            values["fasterCastRate"] = 0;
+            values["increasedAttackSpeed"] = 0;
         }
 
         public string getURI()
@@ -70,31 +83,47 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/snapshots/attributes");
+            uri.setPath("/v1/snapshots/attributes");
         }
 
         public void processGameState(DataReadEventArgs state)
         {
             sendRequired = false;
-            HashSet<int> newValues = new HashSet<int>
+            HashSet<string> newValues = new HashSet<string>
             {
-                state.Character.Strength,
-                state.Character.Dexterity,
-                state.Character.Vitality,
-                state.Character.Energy,
+                string.Concat(state.Character.Strength, "STR"),
+                string.Concat(state.Character.Dexterity, "DEX"),
+                string.Concat(state.Character.Vitality, "VIT"),
+                string.Concat(state.Character.Energy, "ENE"),
 
-                state.Character.FireResist,
-                state.Character.ColdResist,
-                state.Character.LightningResist,
-                state.Character.PoisonResist,
+                string.Concat(state.Character.FireResist, "FR"),
+                string.Concat(state.Character.ColdResist, "CR"),
+                string.Concat(state.Character.LightningResist, "LR"),
+                string.Concat(state.Character.PoisonResist, "PR"),
 
-                state.Character.FasterHitRecovery,
-                state.Character.FasterRunWalk,
-                state.Character.FasterCastRate,
-                state.Character.IncreasedAttackSpeed
+                string.Concat(state.Character.FasterHitRecovery, "FHR"),
+                string.Concat(state.Character.FasterRunWalk, "FRW"),
+                string.Concat(state.Character.FasterCastRate, "FCR"),
+                string.Concat(state.Character.IncreasedAttackSpeed, "IAS")
             };
 
-            HashSet<int> oldValues = new HashSet<int>(values.Values);
+            HashSet<string> oldValues = new HashSet<string>
+            {
+                string.Concat(values["strength"], "STR"),
+                string.Concat(values["dexterity"], "DEX"),
+                string.Concat(values["vitality"], "VIT"),
+                string.Concat(values["energy"], "ENE"),
+
+                string.Concat(values["fireResist"], "FR"),
+                string.Concat(values["coldResist"], "CR"),
+                string.Concat(values["lightningResist"], "LR"),
+                string.Concat(values["poisonResist"], "PR"),
+
+                string.Concat(values["fasterHitRecovery"], "FHR"),
+                string.Concat(values["fasterRunWalk"], "FRW"),
+                string.Concat(values["fasterCastRate"], "FCR"),
+                string.Concat(values["increasedAttackSpeed"], "IAS")
+            };
             oldValues.SymmetricExceptWith(newValues);
             if (oldValues.Count > 0)
             {
@@ -120,9 +149,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return sendRequired;
         }
 
-        public NSTPacket getPacket(string channel, Character character)
+        public SSPacket getPacket(string channel, Character character)
         {
-            return new NSTPacket(channel, character, values);
+            return new SSPacket(channel, character, values);
         }
 
         public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
@@ -134,9 +163,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
-    public class GoldEndpointHandler: INSTEndpointHandler
+    public class GoldEndpointHandler: ISSEndpointHandler
     {
-        private NSTEndpoint uri;
+        private SSEndpoint uri;
         private ILogger logger;
         private Dictionary<string, int> values;
         private bool sendRequired;
@@ -146,7 +175,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         public GoldEndpointHandler(ILogger logger)
         {
             this.logger = logger;
-            uri = new NSTEndpoint();
+            uri = new SSEndpoint();
             values = new Dictionary<string, int>();
             values["currentGold"] = 0;
             values["delta"] = 0;
@@ -163,7 +192,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         // TODO: Remove this method from the interface as it's no longer needed
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/snapshots/gold");
+            uri.setPath("/v1/snapshots/gold");
         }
 
         public void processInitialState(DataReadEventArgs state)
@@ -197,9 +226,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return sendRequired;
         }
 
-        public NSTPacket getPacket(string channel, Character character)
+        public SSPacket getPacket(string channel, Character character)
         {
-            return new NSTPacket(channel, character, values);
+            return new SSPacket(channel, character, values);
 
         }
 
@@ -212,9 +241,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
-    public class EquippedEndpointHandler: INSTEndpointHandler
+    public class EquippedEndpointHandler: ISSEndpointHandler
     {
-        private NSTEndpoint uri;
+        private SSEndpoint uri;
         private ILogger logger;
         private HashSet<string> hashedEquipmentState;
         private Dictionary<int, StructuredItemData> equipmentState;
@@ -224,7 +253,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public EquippedEndpointHandler(ILogger logger)
         {
-            uri = new NSTEndpoint();
+            uri = new SSEndpoint();
             this.logger = logger;
             hashedEquipmentState = new HashSet<string>();
             equipmentState = new Dictionary<int, StructuredItemData>();
@@ -240,7 +269,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/snapshots/items");
+            uri.setPath("/v1/snapshots/items");
         }
 
         public void processGameState(DataReadEventArgs state)
@@ -290,9 +319,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return sendRequired;
         }
 
-        public NSTPacket getPacket(string channel, Character character)
+        public SSPacket getPacket(string channel, Character character)
         {
-            return new NSTPacket(channel, character, equipmentState.Values.Concat(charmState.Values));
+            return new SSPacket(channel, character, equipmentState.Values.Concat(charmState.Values));
 
         }
 
@@ -305,21 +334,19 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
-    public class SkillsEndpointHandler : INSTEndpointHandler
+    public class SkillsEndpointHandler : ISSEndpointHandler
     {
-        private NSTEndpoint uri;
+        private SSEndpoint uri;
         private ILogger logger;
-        private HashSet<string> hashedSkillNames;
-        private HashSet<int> hashedSkillLevels;
+        private HashSet<string> hashedSkills;
         private OrderedDictionary skillState;
         private bool sendRequired;
 
         public SkillsEndpointHandler(ILogger logger)
         {
-            uri = new NSTEndpoint();
+            uri = new SSEndpoint();
             this.logger = logger;
-            hashedSkillNames = new HashSet<string>();
-            hashedSkillLevels = new HashSet<int>();
+            hashedSkills = new HashSet<string>();
             sendRequired = false;
         }
 
@@ -331,33 +358,26 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/snapshots/skills");
+            uri.setPath("/v1/snapshots/skills");
         }
 
         public void processGameState(DataReadEventArgs state)
         {
             sendRequired = false;
-            HashSet<string> newSkillNames = new HashSet<string>();
+
+            HashSet<string> newSkills = new HashSet<string>();
             foreach (string key in state.skillLevels.Keys)
             {
-                newSkillNames.Add(key);
-            }
-            HashSet<int> newSkillLevels = new HashSet<int>();
-            foreach (int val in state.skillLevels.Values)
-            {
-                newSkillLevels.Add(val);
+                newSkills.Add(string.Concat(key, state.skillLevels[key]));
             }
 
-            hashedSkillNames.SymmetricExceptWith(newSkillNames);
-            hashedSkillLevels.SymmetricExceptWith(newSkillLevels);
-            if (hashedSkillNames.Count > 0 || hashedSkillLevels.Count > 0)
+            hashedSkills.SymmetricExceptWith(newSkills);
+            if (hashedSkills.Count > 0)
             {
                 logger.Info("Skill state changed, send required...");
                 sendRequired = true;
             }
-            hashedSkillNames = newSkillNames;
-            hashedSkillLevels = newSkillLevels;
-
+            hashedSkills = newSkills;
             skillState = state.skillLevels;
         }
 
@@ -366,9 +386,9 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             return sendRequired;
         }
 
-        public NSTPacket getPacket(string channel, Character character)
+        public SSPacket getPacket(string channel, Character character)
         {
-            return new NSTPacket(channel, character, skillState);
+            return new SSPacket(channel, character, skillState);
         }
 
         public async Task<HttpResponseMessage> sendSnapshot(HttpClient client, string dest, string packet)
@@ -380,11 +400,11 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
-    public class NSTPacket
+    public class SSPacket
     {
         public Dictionary<string, object> data;
 
-        public NSTPacket(string channel, Character character, object payload)
+        public SSPacket(string channel, Character character, object payload)
         {
             data = new Dictionary<string, object>();
             // I'll come back to this in the future if not having a timestamp
@@ -403,22 +423,22 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         }
     }
 
-    public class NSTBackendService
+    public class SSBackendService
     {
         static readonly ILogger logger = LogServiceLocator.Get(MethodBase.GetCurrentMethod().DeclaringType);
         readonly ISettingsService settingsService;
         readonly IGameService gameService;
         private static readonly HttpClient client = new HttpClient();
-        private List<INSTEndpointHandler> handlers;
+        private List<ISSEndpointHandler> handlers;
 
-        public NSTBackendService(ISettingsService settingsService, IGameService gameService)
+        public SSBackendService(ISettingsService settingsService, IGameService gameService)
         {
-            logger.Info("Creating NST backend service.");
+            logger.Info("Creating SS backend service.");
             this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             this.gameService = gameService ?? throw new ArgumentNullException(nameof(gameService));
             RegisterServiceEventHandlers();
 
-            handlers = new List<INSTEndpointHandler>
+            handlers = new List<ISSEndpointHandler>
             {
                 new EquippedEndpointHandler(logger),
                 new SkillsEndpointHandler(logger),
@@ -429,10 +449,10 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         void RegisterServiceEventHandlers()
         {
-            gameService.DataRead += NSTOnDataRead;
+            gameService.DataRead += SSOnDataRead;
         }
 
-        async void NSTOnDataRead(object sender, DataReadEventArgs e)
+        async void SSOnDataRead(object sender, DataReadEventArgs e)
         {
             Queue<Dictionary<string, object>> sendingHandlers = new Queue<Dictionary<string, object>>();
             // Perform all steps that are required to be synchronous
@@ -443,7 +463,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                 if (handler.isSendRequired())
                 {
                     string uri = handler.getURI();
-                    NSTPacket packet = handler.getPacket("test_channel", e.Character);
+                    SSPacket packet = handler.getPacket("test_channel", e.Character);
                     Dictionary<string, object> handlerState = new Dictionary<string, object>();
                     handlerState["handler"] = handler;
                     handlerState["uri"] = uri;
@@ -458,7 +478,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                 Dictionary<string, object> currentHandler = sendingHandlers.Dequeue();
                 string uri = (string)currentHandler["uri"];
                 string packet = (string)currentHandler["packet"];
-                var response = await ((INSTEndpointHandler)currentHandler["handler"]).sendSnapshot(client, uri, packet);
+                var response = await ((ISSEndpointHandler)currentHandler["handler"]).sendSnapshot(client, uri, packet);
                 logger.Info(response.StatusCode.ToString());
             }
         }

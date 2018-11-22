@@ -50,7 +50,7 @@ namespace Zutatensuppe.DiabloInterface.Gui
                 Logger.Info("Disposing debug window.");
                 UnregisterServiceEventHandlers();
 
-                // NSTBackendService needs to keep this flag enabled
+                // SSBackendService needs to keep this flag enabled
                 // DisableReaderDebugData();
             };
 

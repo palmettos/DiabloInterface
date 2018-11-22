@@ -86,7 +86,7 @@ namespace Zutatensuppe.DiabloInterface
                 CheckForApplicationUpdates(settingsService);
 
                 new CharacterStatFileWriterService(settingsService, gameService);
-                new NSTBackendService(settingsService, gameService);
+                new SSBackendService(settingsService, gameService);
                 var autoSplitService = new AutoSplitService(settingsService, gameService);
                 var pipeServer = CreatePipeServer(gameService, settingsService);
                 var mainWindow = new MainWindow(settingsService, gameService, autoSplitService);
