@@ -279,6 +279,10 @@ namespace Zutatensuppe.DiabloInterface.Gui
 
             settings.ColorBackground = btnSetBackgroundColor.BackColor;
 
+            settings.SanctuaryStatsEnabled = SancStatsBroadcast.Checked;
+            settings.SanctuaryStatsUsername = SancStatsUsernameTextBox.Text;
+            settings.SanctuaryStatsKey = SancStatsKeyTextBox.Text;
+
             return settings;
         }
 

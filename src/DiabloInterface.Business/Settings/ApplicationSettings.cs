@@ -59,6 +59,10 @@ namespace Zutatensuppe.DiabloInterface.Business.Settings
         public Color ColorPoisonRes { get; set; } = Color.YellowGreen;
 
         public Color ColorBackground { get; set; } = Color.Black;
+
+        public bool SanctuaryStatsEnabled { get; set; }
+        public string SanctuaryStatsUsername { get; set; }
+        public string SanctuaryStatsKey { get; set; }
     }
 
     [Serializable]

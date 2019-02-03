@@ -83,7 +83,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/v1/snapshots/attributes");
+            uri.setPath("/api/v1/snapshots/attributes");
         }
 
         public void processGameState(DataReadEventArgs state)
@@ -192,7 +192,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         // TODO: Remove this method from the interface as it's no longer needed
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/v1/snapshots/gold");
+            uri.setPath("/api/v1/snapshots/gold");
         }
 
         public void processInitialState(DataReadEventArgs state)
@@ -269,7 +269,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/v1/snapshots/items");
+            uri.setPath("/api/v1/snapshots/items");
         }
 
         public void processGameState(DataReadEventArgs state)
@@ -358,7 +358,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
 
         public void updateURI(string channelName, string characterName)
         {
-            uri.setPath("/v1/snapshots/skills");
+            uri.setPath("/api/v1/snapshots/skills");
         }
 
         public void processGameState(DataReadEventArgs state)
@@ -430,11 +430,15 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
         readonly IGameService gameService;
         private static readonly HttpClient client = new HttpClient();
         private List<ISSEndpointHandler> handlers;
+        private bool enabled;
+        private string username;
+        private string password;
 
         public SSBackendService(ISettingsService settingsService, IGameService gameService)
         {
             logger.Info("Creating SS backend service.");
             this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            settingsService.SettingsChanged += SettingsChanged;
             this.gameService = gameService ?? throw new ArgumentNullException(nameof(gameService));
             RegisterServiceEventHandlers();
 
@@ -445,11 +449,39 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
                 new GoldEndpointHandler(logger),
                 new AttributesEndpointHandler(logger)
             };
+
+            enabled = settingsService.CurrentSettings.SanctuaryStatsEnabled;
+            username = settingsService.CurrentSettings.SanctuaryStatsUsername;
+            password = settingsService.CurrentSettings.SanctuaryStatsKey;
+
+            var bytes = Encoding.ASCII.GetBytes(username + ":" + password);
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(bytes)
+            );
         }
 
         void RegisterServiceEventHandlers()
         {
             gameService.DataRead += SSOnDataRead;
+        }
+
+        void SettingsChanged(object sender, ApplicationSettingsEventArgs e)
+        {
+            username = e.Settings.SanctuaryStatsUsername;
+            password = e.Settings.SanctuaryStatsKey;
+            enabled = e.Settings.SanctuaryStatsEnabled;
+
+            var bytes = Encoding.ASCII.GetBytes(username + ":" + password);
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(bytes)
+            );
+
+            logger.Info("Updating settings for SSBackendHandler:");
+            logger.Info(e.Settings.SanctuaryStatsEnabled);
+            logger.Info(e.Settings.SanctuaryStatsUsername);
+            logger.Info(e.Settings.SanctuaryStatsKey);
         }
 
         async void SSOnDataRead(object sender, DataReadEventArgs e)
@@ -460,7 +492,7 @@ namespace Zutatensuppe.DiabloInterface.Business.Services
             {
                 handler.updateURI("test_channel", e.Character.Name);
                 handler.processGameState(e);
-                if (handler.isSendRequired())
+                if (handler.isSendRequired() && enabled)
                 {
                     string uri = handler.getURI();
                     SSPacket packet = handler.getPacket("test_channel", e.Character);
